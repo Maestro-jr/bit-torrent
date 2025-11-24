@@ -1,0 +1,24 @@
+// generate the skeleton and stub classes
+// generate calculator_pb2.py and calculator_pb2_grpc.py.
+// python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. calculator.proto
+
+syntax = "proto3";
+
+package cloud;
+
+service Calculator {
+  rpc Add (AddRequest) returns (AddResponse);
+  rpc Sub (AddRequest) returns (AddResponse);
+  rpc Mul (AddRequest) returns (AddResponse);
+  rpc Div (AddRequest) returns (AddResponse);
+  rpc Mod (AddRequest) returns (AddResponse);
+}
+
+message AddRequest {
+  int32 num1 = 1;
+  int32 num2 = 2;
+}
+
+message AddResponse {
+  int32 result = 1;
+}
