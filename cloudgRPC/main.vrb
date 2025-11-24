@@ -1,0 +1,8 @@
+\frametitle{Client Implementation (3)}
+\lstinputlisting[language=Python, firstline=34, lastline=43]{client.py}
+\begin{itemize}
+    \item Uses thread pool for concurrent requests
+    \item Predefined list of jobs to execute
+    \item Submits each job to the thread pool
+    \item Demonstrates concurrent RPC calls
+\end{itemize}

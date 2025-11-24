@@ -1,0 +1,254 @@
+\documentclass{beamer}
+\usetheme{Madrid}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+% Custom Protocol Buffers language definition
+\lstdefinelanguage{protobuf}{
+    keywords={syntax, package, service, rpc, returns, message, optional, required, repeated, import},
+    keywordstyle=\color{magenta},
+    morecomment=[l]{//},
+    commentstyle=\color{codegreen},
+    stringstyle=\color{codepurple},
+    morestring=[b]{"},
+    morestring=[b]{'},
+    basicstyle=\ttfamily\footnotesize,
+    numbers=left,
+    numberstyle=\tiny\color{codegray},
+    breaklines=true,
+    showstringspaces=false,
+    tabsize=2
+}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
+\title{gRPC Implementation: Calculator Service}
+\subtitle{A Practical Demonstration (basic online calculator)}
+\author{Engr. Daniel Moune}
+\institute{ICT University}
+\date{\today}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}
+\frametitle{Overview}
+\begin{itemize}
+    \item Introduction to gRPC
+    \item Project Structure
+    \item Protocol Buffers Definition
+    \item Server Implementation
+    \item Client Implementation
+    \item Key Features
+    \item Demonstration
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{What is gRPC?}
+\begin{itemize}
+    \item High-performance RPC framework by Google
+    \item Uses Protocol Buffers (protobuf) as interface definition language
+    \item Features:
+    \begin{itemize}
+        \item Language-neutral
+        \item Bi-directional streaming
+        \item Pluggable authentication
+        \item Load balancing
+    \end{itemize}
+    \item HTTP/2 based transport
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Project Structure}
+\begin{itemize}
+    \item \texttt{calculator.proto} - Service definition
+    \item \texttt{calculator\_pb2.py} - Generated protobuf classes
+    \item \texttt{calculator\_pb2\_grpc.py} - Generated gRPC classes
+    \item \texttt{cloud.py} - Server implementation
+    \item \texttt{client.py} - Client implementation
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Protocol Buffers Definition}
+\begin{lstlisting}[language=protobuf, firstline=7, lastline=21]
+syntax = "proto3";
+
+package cloud;
+
+service Calculator {
+  rpc Add (AddRequest) returns (AddResponse);
+  rpc Sub (AddRequest) returns (AddResponse);
+  rpc Mul (AddRequest) returns (AddResponse);
+  rpc Div (AddRequest) returns (AddResponse);
+  rpc Mod (AddRequest) returns (AddResponse);
+}
+
+message AddRequest {
+  int32 num1 = 1;
+  int32 num2 = 2;
+}
+
+message AddResponse {
+  int32 result = 1;
+}
+\end{lstlisting}
+\begin{itemize}
+    \item Defines service \texttt{Calculator} with 5 RPC methods
+    \item All methods use \texttt{AddRequest} and \texttt{AddResponse} messages
+    \item Simple message structure with two integers and a result
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Generated Code}
+\begin{itemize}
+    \item \texttt{python -m grpc\_tools.protoc} generates:
+    \begin{itemize}
+        \item \texttt{calculator\_pb2.py} - Message classes
+        \item \texttt{calculator\_pb2\_grpc.py} - Server and client classes
+    \end{itemize}
+    \item Provides:
+    \begin{itemize}
+        \item Serialization/deserialization
+        \item Client stub
+        \item Server interface
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Server Implementation (1)}
+\lstinputlisting[language=Python, firstline=1, lastline=10]{cloud.py}
+\begin{itemize}
+    \item Extends \texttt{CalculatorServicer} generated class
+    \item Implements all 5 RPC methods
+    \item Each method performs the operation and returns a response
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Server Implementation (2)}
+\lstinputlisting[language=Python, firstline=12, lastline=18]{cloud.py}
+\begin{itemize}
+    \item Creates gRPC server with thread pool
+    \item Adds servicer to the server
+    \item Binds to port 50051
+    \item Starts the server
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Client Implementation (1)}
+\lstinputlisting[language=Python, firstline=1, lastline=15]{client.py}
+\begin{itemize}
+    \item \texttt{job} class encapsulates operation details
+    \item Provides access to operator and operands
+    \item Type hints for better code clarity
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Client Implementation (2)}
+\lstinputlisting[language=Python, firstline=17, lastline=32]{client.py}
+\begin{itemize}
+    \item Creates insecure channel (for demo purposes)
+    \item Selects appropriate RPC method based on operator
+    \item Handles invalid operator case
+    \item Prints the result
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Client Implementation (3)}
+\lstinputlisting[language=Python, firstline=34, lastline=43]{client.py}
+\begin{itemize}
+    \item Uses thread pool for concurrent requests
+    \item Predefined list of jobs to execute
+    \item Submits each job to the thread pool
+    \item Demonstrates concurrent RPC calls
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Key Features}
+\begin{itemize}
+    \item \textbf{Type Safety}: Protobuf ensures type-safe communication
+    \item \textbf{Concurrency}: Thread pool handles multiple requests
+    \item \textbf{Simplicity}: Clean separation between client and server
+    \item \textbf{Extensibility}: Easy to add new operations
+    \item \textbf{Performance}: HTTP/2 and binary protocol
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Demonstration}
+\begin{itemize}
+    \item Start the server: \texttt{python cloud.py}
+    \item Run the client: \texttt{python client.py}
+    \item Expected output:
+    \begin{itemize}
+        \item Result: 660 (add)
+        \item Result: 606 (sub)
+        \item Result: 23 (div)
+        \item Result: 12 (mod)
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Conclusion}
+\begin{itemize}
+    \item gRPC provides efficient RPC mechanism
+    \item Protocol Buffers enable language-neutral contracts
+    \item Python implementation is straightforward
+    \item Suitable for microservices and distributed systems
+    \item Next steps:
+    \begin{itemize}
+        \item Add error handling
+        \item Implement streaming
+        \item Add authentication
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{References}
+\begin{itemize}
+    \item gRPC official documentation: \url{https://grpc.io/}
+    \item Protocol Buffers guide: \url{https://developers.google.com/protocol-buffers}
+    \item Python gRPC examples: \url{https://github.com/grpc/grpc/tree/master/examples/python}
+\end{itemize}
+\centering
+Thank You!
+\end{frame}
+
+\end{document}
