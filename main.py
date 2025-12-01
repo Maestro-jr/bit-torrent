@@ -1,7 +1,7 @@
 from storage_virtual_network import StorageVirtualNetwork
 from storage_virtual_node import StorageVirtualNode
 
-# Create network
+# Create network and related
 network = StorageVirtualNetwork()
 
 # Create nodes
