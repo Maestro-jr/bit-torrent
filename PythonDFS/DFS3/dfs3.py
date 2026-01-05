@@ -5,10 +5,6 @@ Distributed File System
 Server 3
 Fonyuy Berka
 Jan 2026
-
-MODIFIED:
-- DFS3 serves files from:
-  C:\Users\HP\Desktop\Servers\Server 3
 """
 
 # =========================
@@ -67,11 +63,10 @@ def auth_params():
 # CLIENT AUTH
 # =========================
 def client_auth(auth_dict, username, password):
-	for user, pwd in auth_dict.items():
-		if username == user and password == pwd:
-			conn.send(b"Authorization Granted.\n")
-			print("Authorization Granted.")
-			return
+	if username in auth_dict and auth_dict[username] == password:
+		conn.send(b"Authorization Granted.\n")
+		print("Authorization Granted.")
+		return
 
 	conn.send(b"Authorization Denied.\n")
 	sys.exit()
@@ -82,11 +77,7 @@ def client_auth(auth_dict, username, password):
 def new_dir(username):
 	global new_dir_path
 	new_dir_path = os.path.join(STORAGE_ROOT, username)
-
-	if not os.path.isdir(new_dir_path):
-		os.makedirs(new_dir_path, exist_ok=True)
-		print(f"Created user directory: {new_dir_path}")
-
+	os.makedirs(new_dir_path, exist_ok=True)
 	return new_dir_path
 
 # =========================
@@ -96,10 +87,8 @@ def put(new_dir_path):
 	buffersize = int(conn.recv(2048).decode())
 	print("Buffer size:", buffersize)
 
-	# -------- First chunk --------
 	name1 = conn.recv(1024).decode()
 	chunk1 = conn.recv(buffersize)
-	print("Receiving", name1)
 
 	file_folder = name1.split('_')[0]
 	file_dir = os.path.join(new_dir_path, file_folder)
@@ -110,16 +99,13 @@ def put(new_dir_path):
 
 	conn.send(b"Chunk 1 successfully transferred.\n")
 
-	# -------- Second chunk --------
 	name2 = conn.recv(1024).decode()
 	chunk2 = conn.recv(buffersize)
-	print("Receiving", name2)
 
 	with open(os.path.join(file_dir, name2), 'wb') as fh:
 		fh.write(chunk2)
 
 	conn.send(b"Chunk 2 successfully transferred.\n")
-
 	sys.exit()
 
 # =========================
@@ -150,8 +136,6 @@ def list_files(username):
 # =========================
 def get(username):
 	filename = conn.recv(1024).decode()
-	print("User requested:", filename)
-
 	user_dir = os.path.join(STORAGE_ROOT, username)
 	file_dir = os.path.join(user_dir, filename)
 
@@ -166,14 +150,13 @@ def get(username):
 
 	buffersize = os.path.getsize(chunk1_path) + 4
 	conn.send(str(buffersize).encode())
-	time.sleep(1)
+	time.sleep(0.5)
 
 	conn.send(name1.encode())
 	time.sleep(0.5)
 	conn.send(open(chunk1_path, "rb").read())
 
 	FINACK = conn.recv(1024).decode()
-
 	if FINACK == "Transfer incomplete":
 		conn.send(name2.encode())
 		time.sleep(0.5)
@@ -191,7 +174,7 @@ server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.bind((server_name, server_port))
 server_socket.listen(5)
 
-print("DFS3 listening on port 10003")
+print("DFS3 running on port 10003")
 print("Storage root:", STORAGE_ROOT)
 
 while True:
@@ -203,11 +186,9 @@ while True:
 
 	auth_params()
 	client_auth(auth_dict, username, password)
-
 	new_dir(username)
 
 	command = conn.recv(1024).decode()
-	print("Command:", command)
 
 	if command == "put":
 		put(new_dir_path)

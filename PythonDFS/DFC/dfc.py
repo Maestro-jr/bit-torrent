@@ -1,1165 +1,200 @@
 #! /usr/bin/env python3
-
 """
 Distributed File System
-Client
-Fonyuy Berka
-September
+Client (DFC)
+Compatible with modified DFS servers
 """
 
-# DFC
-
-# modules
 import re
 import os
 import sys
-import glob
 import time
-import pickle
 import socket
-import hashlib
 import threading
+import hashlib
 
+# ---------------- ARG CHECK ---------------- #
 
-# check argument to open dfc.conf 
 def check_args():
-    # error handling no argument
-    if len(sys.argv) != 2:
-        print("ERROR: Must supply an argument \nUSAGE: py dfc.py dfc.conf")
+    if len(sys.argv) != 2 or sys.argv[1].lower() != 'dfc.conf':
+        print("USAGE: py dfc.py dfc.conf")
         sys.exit()
-
-    # error handling argument passed
-    elif sys.argv[1].lower() != 'dfc.conf':
-        print("ERROR: Must supply a valid argument \nUSAGE: py dfc.py dfc.conf")
-        sys.exit()
-
-    # error if there is no dfc.conf file
-    elif os.path.isfile(sys.argv[1]) != True:
+    if not os.path.isfile(sys.argv[1]):
         print("ERROR: dfc.conf not found.")
         sys.exit()
 
-    # if no error, return dfc.conf
-    else:
-        return sys.argv[1]
+# ---------------- AUTH ---------------- #
 
+def load_auth():
+    with open('dfc.conf', 'r', encoding='cp1252') as fh:
+        users = re.findall(r'Username: .*', fh.read())
+    with open('dfc.conf', 'r', encoding='cp1252') as fh:
+        passes = re.findall(r'Password: .*', fh.read())
 
-# params for user auth from dfc.conf
-def user_auth():
-    # get usernames
-    fh = open('dfc.conf', mode='r', encoding='cp1252')
-    users = re.findall(r'Username: .*', fh.read())
-    usernames = list()
-    for i in range(0, len(users)):
-        usernames.append(str(users[i]).split()[1])
-    fh.close()
+    return {u.split()[1]: p.split()[1] for u, p in zip(users, passes)}
 
-    # get passwords
-    fh = open('dfc.conf', mode='r', encoding='cp1252')
-    passes = re.findall(r'Password: .*', fh.read())
-    passwords = list()
-    for i in range(0, len(passes)):
-        passwords.append(str(passes[i]).split()[1])
-    fh.close()
-
-    # dict with usernames:passwords
-    global auth_dict
-    auth_dict = {}
-    for i in range(0, len(users)):
-        entry = {usernames[i]: passwords[i]}
-        auth_dict.update(entry)
-
-    return auth_dict
-
-
-# client-side auth
 def authenticate():
-    # config params
-    user_auth()
+    auth = load_auth()
 
-    # authenticate username
-
-    # initialize an auth status
-    auth_status = ''
-
-    # give user 4 attempts
-    for i in range(0, 4):
-        if auth_status == 'Valid username.':
-            # go to password auth
-            pass
-
-        else:
-            # get username
-            username = input('username: ')
-
-            # initialize username auth
-            username_auth = []
-            ct = 0
-            for key, value in auth_dict.items():
-                ct += 1
-                if username == key:
-                    # get specific username index in dictionary
-                    username_auth.append(ct)
-                else:
-                    username_auth.append(0)
-
-            if i < 2:
-                if sum(username_auth) > 0:
-                    auth_status = 'Valid username.'
-                    continue
-                else:
-                    print('Username does not exist. You have ' + str(3 - i) + ' attempts left.')
-                    continue
-            elif i == 2:
-                if sum(username_auth) > 0:
-                    auth_status = 'Valid username.'
-                    continue
-                else:
-                    print('Username does not exist. You have ' + str(3 - i) + ' attempt left.')
-                    continue
-            else:
-                if sum(username_auth) > 0:
-                    auth_status = 'Valid username.'
-                    continue
-                else:
-                    print('Username does not exist. You have no more attempts.\nExiting now....')
-                    sys.exit()
-
-    # authenticate password
-    # get the index of the user in the auth_dict to check password in that index
-    user_index = sum(username_auth)
-
-    # re-initialize auth status
-    auth_status = ''
-    for i in range(0, 4):
-        if auth_status == 'Valid password.':
-            # pass authentication
-            pass
-
-        else:
-            # get password
-            password = input('password: ')
-            # hash
-            hash = hashlib.md5()
-            hash.update(password.encode())
-            password = hash.hexdigest()
-
-            # initialize password auth
-            password_auth = []
-            ct = 0
-            for key, value in auth_dict.items():
-                ct += 1
-                if password == value:
-                    password_auth.append(ct)
-                else:
-                    password_auth.append(0)
-
-            if i < 2:
-                if sum(password_auth) > 0:
-                    # check that index of password matches user index
-                    if user_index == sum(password_auth):
-                        auth_status = 'Valid password.'
-                        continue
-                    else:
-                        print('Wrong password. You have ' + str(3 - i) + ' attempts left.')
-                        continue
-                else:
-                    print('Wrong password. You have ' + str(3 - i) + ' attempts left.')
-                    continue
-            elif i == 2:
-                if sum(password_auth) > 0:
-                    if user_index == sum(password_auth):
-                        auth_status = 'Valid password.'
-                        continue
-                    else:
-                        print('Wrong password. You have ' + str(3 - i) + ' attempt left.')
-                        continue
-                else:
-                    print('Wrong password. You have ' + str(3 - i) + ' attempt left.')
-                    continue
-            else:
-                if user_index == sum(password_auth):
-                    auth_status = 'Valid password.'
-                    continue
-                else:
-                    print('Wrong password. You have no more attempts.\nExiting now....')
-                    sys.exit()
-
-    # Final auth after passing all checks
-    print('Authorization Granted.')
-    global final_authorization
-    final_authorization = (username, password)
-    return final_authorization
-
-
-# config params for server
-def server_conf():
-    # open config file
-    fh = open('dfc.conf', mode='r', encoding='cp1252')
-    params = re.findall(r'DFS.*', fh.read())
-
-    # get server names
-    s_names = list()
-    for i in range(0, len(params)):
-        s_names.append(str(params[i]).split()[1].split(":")[0])
-
-    # get server ports
-    s_ports = list()
-    for i in range(0, len(params)):
-        s_ports.append(str(params[i]).split()[1].split(":")[1])
-
-    # dict with server names
-    s_names_dict = {}
-    for i in range(0, len(params)):
-        entry = {'server' + str(i + 1): s_names[i]}
-        s_names_dict.update(entry)
-
-    # dict with server ports
-    s_ports_dict = {}
-    for i in range(0, len(params)):
-        entry = {'server' + str(i + 1): s_ports[i]}
-        s_ports_dict.update(entry)
-
-    # lists of (sever name, server port) lists
-    global server_list
-    server_list = list()
-    ct = 0
-    for i in range(0, len(params)):
-        ct += 1
-        server_list.append((s_names_dict['server' + str(ct)], \
-                            int(s_ports_dict['server' + str(ct)])))
-    return server_list
-
-
-# split a file given a chunk size
-def split_files(filename, chunksize):
-    # create chunks
-    with open(filename + '.txt', 'rb') as bytefile:
-        content = bytearray(os.path.getsize(filename + '.txt'))
-        bytefile.readinto(content)
-
-        for count, i in enumerate(range(0, len(content), chunksize)):
-            with open(filename + '_' + str(count + 1) + '.txt.', 'wb') as fh:
-                fh.write(content[i: i + chunksize])
-
-
-# determine server location for chunk pairs
-def chunk_pairs(filename):
-    # group chunks in paired lists							# per table:
-    pair1 = [filename + '_1.txt', filename + '_2.txt']  # 1,2
-    pair2 = [filename + '_2.txt', filename + '_3.txt']  # 2,3
-    pair3 = [filename + '_3.txt', filename + '_4.txt']  # 3,4
-    pair4 = [filename + '_4.txt', filename + '_1.txt']  # 4,1
-
-    # md5 hash value of file
-
-    hash = hashlib.md5()
-    with open(filename + '.txt', 'rb') as fh:
-        buffer = fh.read()
-        hash.update(buffer)
-
-        # molulus determines server pairs
-        storeval = int(hash.hexdigest(), 16) % 4
-
-    # server pairs depending on modulus
-    if storeval == 0:
-        dfs1 = pair1
-        dfs2 = pair2
-        dfs3 = pair3
-        dfs4 = pair4
-    elif storeval == 1:
-        dfs1 = pair4
-        dfs2 = pair1
-        dfs3 = pair2
-        dfs4 = pair3
-    elif storeval == 2:
-        dfs1 = pair3
-        dfs2 = pair4
-        dfs3 = pair1
-        dfs4 = pair2
-    else:
-        dfs1 = pair2
-        dfs2 = pair3
-        dfs3 = pair4
-        dfs4 = pair1
-
-    return dfs1, dfs2, dfs3, dfs4
-
-
-# get command from user
-def get_command():
-    global command
-    command = ''
-    for i in range(0, 4):
-        if command != '':
-            return command
+    for _ in range(3):
+        username = input("username: ")
+        if username in auth:
             break
-        else:
-            comm = input('Please specify a command [get, list, put]: ')
-            if i < 2:
-                if comm.lower() == 'get':
-                    command = 'get'
-                    continue
-                elif comm.lower() == 'list':
-                    command = 'list'
-                    continue
-                elif comm.lower() == 'put':
-                    command = 'put'
-                    continue
-                else:
-                    print('There is no such command. You have ' + str(3 - i) + ' attempts left.')
-                    continue
-            elif i == 2:
-                if comm.lower() == 'get':
-                    command = 'get'
-                    continue
-                elif comm.lower() == 'list':
-                    command = 'list'
-                    continue
-                elif comm.lower() == 'put':
-                    command = 'put'
-                    continue
-                else:
-                    print('There is no such command. You have ' + str(3 - i) + ' attempt left.')
-                    continue
-            else:
-                print('There is no such command. You have no more attempts.\nExiting now....')
-                sys.exit()
-
-
-# get a file name from user
-def get_filename():
-    for i in range(0, 2):
-        if i == 0:
-            txtfiles = []
-            print('Current files: ')
-            print('-' * 15)
-            for file in glob.glob("*.txt"):
-                txtfiles.append(file)
-                print(file.split(".")[0])
-            print('\n')
-            filename = input('Please specify a file: ')
-
-            # check if file exists
-            try:
-                statinfo = os.stat(filename + '.txt')
-                break
-            except FileNotFoundError:
-                print('There is no such file in the directory.\nPlease try again.\n')
-                continue
-        else:
-            txtfiles = []
-            print('Current files: ')
-            print('-' * 15)
-            for file in glob.glob("*.txt"):
-                txtfiles.append(file)
-                print(file.split(".")[0])
-            print('\n')
-            filename = input('Please specify a file: ')
-
-            # check if file exists
-            try:
-                statinfo = os.stat(filename + '.txt')
-            except FileNotFoundError:
-                print('There is no such file in the directory.\nExiting now...')
-                sys.exit()
-
-    global filename_statinfo
-    filename_statinfo = (filename, statinfo)
-    return filename_statinfo
-
-
-# --- Helper functions for parallel GET -------------------------------------
-
-def _recv_prepare_and_buffersize(conn):
-    """
-    Read initial response from server and return True + buffersize if server is
-    preparing transfer; otherwise return (False, message).
-    """
-    try:
-        resp = conn.recv(1024).decode()
-        if resp != 'Server is preparing file transfer...':
-            return False, resp
-        # server preparing: next send buffersize
-        bufs = conn.recv(1024).decode()
-        try:
-            buffersize = int(bufs)
-        except:
-            # fallback
-            buffersize = None
-        return True, buffersize
-    except Exception:
-        return False, "No response / connection error"
-
-
-def _recv_one_chunk(conn, buffersize):
-    """
-    Receive one chunk: first a name (1024) then the chunk data (buffersize).
-    Returns (name, bytes) or (None, None) on failure.
-    """
-    try:
-        name = conn.recv(1024).decode()
-        if not name:
-            return None, None
-        # receive the chunk bytes (single recv as original code did)
-        data = b''
-        # try a single recv of buffersize (mirrors original behaviour)
-        try:
-            data = conn.recv(buffersize)
-        except Exception:
-            # fallback: read in small blocks until no more data available (non-ideal)
-            while True:
-                part = conn.recv(4096)
-                if not part:
-                    break
-                data += part
-        return name, data
-    except Exception:
-        return None, None
-
-
-def threaded_first_batch(conn, server_name, filename, chunk_store, lock, buffersize_container):
-    """
-    Thread target for reading first batch from a single server.
-    Writes received chunk(s) into chunk_store dict as {chunk_name: bytes}.
-    buffersize_container is a dict used to store buffersize found (if any).
-    """
-    try:
-        ok, info = _recv_prepare_and_buffersize(conn)
-        if not ok:
-            # store server message for debugging if needed
-            print(f"{server_name}: {info}")
-            return
-        buffersize = info
-        # store buffersize if not set yet
-        with lock:
-            if buffersize_container.get('buffersize') is None:
-                buffersize_container['buffersize'] = buffersize
-
-        # try receive one chunk (first batch)
-        cname, cdata = _recv_one_chunk(conn, buffersize)
-        if cname and cdata is not None:
-            # store chunk bytes
-            with lock:
-                chunk_store[cname] = cdata
-            print(f"{server_name} -> sent {cname} ({len(cdata)} bytes)")
-        else:
-            # nothing received from this server in first batch
-            print(f"{server_name} -> sent no chunk in first batch")
-    except Exception as e:
-        print(f"Error in threaded_first_batch for {server_name}: {e}")
-
-
-def threaded_second_batch(conn, server_name, filename, chunk_store, lock, buffersize):
-    """
-    After client sends NACK, servers may send a second chunk (name + data).
-    Thread to receive that one chunk and store it.
-    """
-    try:
-        # expecting name then data
-        cname = conn.recv(1024).decode()
-        if not cname:
-            print(f"{server_name} -> no chunk name in second batch")
-            return
-        data = conn.recv(buffersize)
-        with lock:
-            chunk_store[cname] = data
-        print(f"{server_name} -> sent (2nd) {cname} ({len(data)} bytes)")
-    except Exception as e:
-        print(f"Error in threaded_second_batch for {server_name}: {e}")
-
-
-# ---------------------------------------------------------------------------
-
-
-# define client socket connection
-def client():
-    # authenticate with client ----------------------------
-    authenticate()
-    username = final_authorization[0]
-    password = final_authorization[1]
-
-    # connect to servers ----------------------------------
-
-    # config params for servers
-    server_conf()
-
-    # DFS1
-    try:
-        client_socket1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket1.connect(server_list[0])
-        status1 = ('Connected to server', 'DFS1')
-        print(status1[0], status1[1])
-        time.sleep(1)
-    except Exception:
-        status1 = ('Could not connect to server', 'DFS1')
-        print(status1[0], status1[1])
-        # create a dummy closed socket to keep tuple lengths consistent
-        try:
-            client_socket1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket1.close()
-        except:
-            pass
-
-    # DFS2
-    try:
-        client_socket2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket2.connect(server_list[1])
-        status2 = ('Connected to server', 'DFS2')
-        print(status2[0], status2[1])
-        time.sleep(1)
-    except Exception:
-        status2 = ('Could not connect to server', 'DFS2')
-        print(status2[0], status2[1])
-        try:
-            client_socket2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket2.close()
-        except:
-            pass
-
-    # DFS3
-    try:
-        client_socket3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket3.connect(server_list[2])
-        status3 = ('Connected to server', 'DFS3')
-        print(status3[0], status3[1])
-        time.sleep(1)
-    except Exception:
-        status3 = ('Could not connect to server', 'DFS3')
-        print(status3[0], status3[1])
-        try:
-            client_socket3 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket3.close()
-        except:
-            pass
-
-    # DFS4
-    try:
-        client_socket4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket4.connect(server_list[3])
-        status4 = ('Connected to server', 'DFS4')
-        print(status4[0], status4[1])
-        time.sleep(1)
-    except Exception:
-        status4 = ('Could not connect to server', 'DFS4')
-        print(status4[0], status4[1])
-        try:
-            client_socket4 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            client_socket4.close()
-        except:
-            pass
-
-    # if all servers are down, exit client
-    if status1[0] == 'Could not connect to server' and status2[0] == 'Could not connect to server' \
-            and status3[0] == 'Could not connect to server' and status4[0] == 'Could not connect to server':
-        print('All servers are down.\nExiting now...')
-        sys.exit()
+        print("Invalid username.")
     else:
+        sys.exit()
+
+    for _ in range(3):
+        password = input("password: ")
+        if auth[username] == password:
+            print("Authorization Granted.")
+            return username, password
+        print("Invalid password.")
+    sys.exit()
+
+# ---------------- SERVER CONF ---------------- #
+
+def server_conf():
+    with open('dfc.conf', 'r', encoding='cp1252') as fh:
+        params = re.findall(r'DFS.*', fh.read())
+
+    servers = []
+    for p in params:
+        host, port = p.split()[1].split(':')
+        servers.append((host, int(port)))
+    return servers
+
+# ---------------- FILE SPLIT ---------------- #
+
+def split_file(filename, buf):
+    with open(filename + '.txt', 'rb') as f:
+        data = f.read()
+
+    for i in range(4):
+        with open(f"{filename}_{i+1}.txt", 'wb') as out:
+            out.write(data[i*buf:(i+1)*buf])
+
+def chunk_pairs(filename):
+    pairs = [
+        [f"{filename}_1.txt", f"{filename}_2.txt"],
+        [f"{filename}_2.txt", f"{filename}_3.txt"],
+        [f"{filename}_3.txt", f"{filename}_4.txt"],
+        [f"{filename}_4.txt", f"{filename}_1.txt"]
+    ]
+    h = int(hashlib.md5(filename.encode()).hexdigest(), 16) % 4
+    return pairs[h:] + pairs[:h]
+
+# ---------------- GET HELPERS ---------------- #
+
+def recv_chunks(conn, store, lock):
+    try:
+        bufsize = int(conn.recv(1024).decode())
+        name1 = conn.recv(1024).decode()
+        data1 = conn.recv(bufsize)
+
+        with lock:
+            store[name1] = data1
+
+        conn.send(b"Transfer incomplete")
+
+        name2 = conn.recv(1024).decode()
+        data2 = conn.recv(bufsize)
+
+        with lock:
+            store[name2] = data2
+    except:
         pass
 
-    # looping lists: connections, and server names
-    conns = (client_socket1, client_socket2, client_socket3, client_socket4)
-    DFSS = ('DFS1', 'DFS2', 'DFS3', 'DFS4')
+# ---------------- CLIENT ---------------- #
 
-    # authenticate with servers ---------------------------
+def client():
+    username, password = authenticate()
+    servers = server_conf()
 
-    # send usernames
-    for i in range(0, 4):
+    conns = []
+    names = ['DFS1', 'DFS2', 'DFS3', 'DFS4']
+
+    for i, s in enumerate(servers):
         try:
-            conns[i].send(username.encode())
-            time.sleep(1)
-        except Exception:
-            pass
-
-        # send passwords
-    for i in range(0, 4):
-        try:
-            conns[i].send(password.encode())
-        except Exception:
-            pass
-
-    # server authorization response
-    for i in range(0, 4):
-        try:
-            response = conns[i].recv(1024)
-            print('From ' + DFSS[i] + ': ' + response.decode())
-        except Exception:
-            pass
-
-    # get command from user -------------------------------
-    get_command()
-
-    # PUT
-    if command.lower() == 'put':
-        for i in range(0, 4):
-            try:
-                conns[i].send(command.encode())
-            except Exception:
-                pass
-
-        # get a file name from user
-        get_filename()
-        filename = filename_statinfo[0]
-        statinfo = filename_statinfo[1]
-
-        # determine size of file and chunks
-        filesize = statinfo.st_size
-        buffersize = round(float(filesize) / 4) + 4
-
-        # split files into 4 chunks
-        split_files(filename, buffersize)
-
-        # determine chunk pairs and server locations
-        dfs1, dfs2, dfs3, dfs4 = chunk_pairs(filename)
-
-        # list to loop through
-        dfss = (dfs1, dfs2, dfs3, dfs4)
-
-        # send chunk pairs to servers
-
-        # buffer size
-        for i in range(0, 4):
-            try:
-                conns[i].send(str(buffersize).encode())
-            except Exception:
-                pass
-
-            # chunk1 name and data
-        for i in range(0, 4):
-            try:
-                conns[i].send(dfss[i][0].encode())
-                time.sleep(0.5)
-                chunk1 = open(dfss[i][0], 'rb').read()
-                conns[i].send(chunk1)
-                print('\nSending ' + str(dfss[i][0]) + '...\n')
-            except Exception:
-                pass
-
-        # get chunk1 response
-        for i in range(0, 4):
-            try:
-                response = conns[i].recv(1024).decode()
-                if response == 'Chunk 1 successfully transferred.\n':
-                    print(DFSS[i] + ' Chunk 1 transfer complete.')
-                else:
-                    print(DFSS[i] + ' Chunk 1 transfer failed.')
-            except Exception:
-                pass
-
-        # chunk2 name and data
-        for i in range(0, 4):
-            try:
-                conns[i].send(dfss[i][1].encode())
-                time.sleep(0.5)
-                chunk2 = open(dfss[i][1], 'rb').read()
-                conns[i].send(chunk2)
-                print('\nSending ' + str(dfss[i][1]) + '...\n')
-            except Exception:
-                pass
-
-        # get chunk2 response
-        for i in range(0, 4):
-            try:
-                response = conns[i].recv(1024).decode()
-                if response == 'Chunk 2 successfully transferred.\n':
-                    print(DFSS[i] + ' Chunk 2 transfer complete.')
-                else:
-                    print(DFSS[i] + ' Chunk 2 transfer incomplete.')
-            except Exception:
-                pass
-
-        # delete chunks from client directory
-        try:
-            os.remove(str(dfs1[0]))
-            os.remove(str(dfs1[1]))
-            os.remove(str(dfs3[0]))
-            os.remove(str(dfs3[1]))
-        except Exception:
-            pass
-
-        print('\nExiting now...')
-        sys.exit()
-
-    # LIST
-    elif command.lower() == 'list':
-
-        # inform servers
-        for i in range(0, 4):
-            try:
-                conns[i].send(command.encode())
-            except Exception:
-                pass
-
-        # get list of files, print to console
-        for i in range(0, 4):
-            try:
-                file_names = conns[i].recv(4096).decode()
-                # print a table for each server
-                print('\nCurrent ' + DFSS[i] + '\%s files:' % username)
-                print('-' * 27)
-                print(file_names)
-            except Exception:
-                pass
-
-        # ask if user wants to put a file
-        print('\nWould you like to get files, put files, or exit?')
-        answer = input('[get, put, exit]: ')
-
-        # inform servers
-        for i in range(0, 4):
-            try:
-                conns[i].send(answer.encode())
-            except Exception:
-                pass
-
-        # PUT (within LIST)
-        if answer.lower() == 'put':
-
-            # get a file name from user
-            get_filename()
-            filename = filename_statinfo[0]
-            statinfo = filename_statinfo[1]
-
-            # determine size of file and chunks
-            filesize = statinfo.st_size
-            buffersize = round(float(filesize) / 4) + 4
-
-            # split files into 4 chunks
-            split_files(filename, buffersize)
-
-            # determine chunk pairs and server locations
-            dfs1, dfs2, dfs3, dfs4 = chunk_pairs(filename)
-
-            # list to loop through
-            dfss = (dfs1, dfs2, dfs3, dfs4)
-
-            # send chunk pairs to servers
-
-            # buffer size
-            for i in range(0, 4):
-                try:
-                    conns[i].send(str(buffersize).encode())
-                except Exception:
-                    pass
-
-                # chunk1 name and data
-            for i in range(0, 4):
-                try:
-                    conns[i].send(dfss[i][0].encode())
-                    time.sleep(0.5)
-                    chunk1 = open(dfss[i][0], 'rb').read()
-                    conns[i].send(chunk1)
-                    print('\nSending ' + str(dfss[i][0]) + '...\n')
-                except Exception:
-                    pass
-
-            # get chunk1 response
-            for i in range(0, 4):
-                try:
-                    response = conns[i].recv(1024).decode()
-                    if response == 'Chunk 1 successfully transferred.\n':
-                        print(DFSS[i] + ' Chunk 1 transfer complete.')
-                    else:
-                        print(DFSS[i] + ' Chunk 1 transfer failed.')
-                except Exception:
-                    pass
-
-            # chunk2 name and data
-            for i in range(0, 4):
-                try:
-                    conns[i].send(dfss[i][1].encode())
-                    time.sleep(0.5)
-                    chunk2 = open(dfss[i][1], 'rb').read()
-                    conns[i].send(chunk2)
-                    print('\nSending ' + str(dfss[i][1]) + '...\n')
-                except Exception:
-                    pass
-
-            # get chunk2 response
-            for i in range(0, 4):
-                try:
-                    response = conns[i].recv(1024).decode()
-                    if response == 'Chunk 2 successfully transferred.\n':
-                        print(DFSS[i] + ' Chunk 2 transfer complete.')
-                    else:
-                        print(DFSS[i] + ' Chunk 2 transfer incomplete.')
-                except Exception:
-                    pass
-
-            # delete chunks from client directory
-            try:
-                os.remove(str(dfs1[0]))
-                os.remove(str(dfs1[1]))
-                os.remove(str(dfs3[0]))
-                os.remove(str(dfs3[1]))
-            except Exception:
-                pass
-
-            print('\nExiting now...')
-            sys.exit()
-
-
-        # GET (within LIST)
-        elif answer.lower() == 'get':
-            # already informed servers!
-
-            # create a subdirectory for user in client
-            new_dir_path = os.getcwd() + '\\' + username
-
-            if os.path.isdir(new_dir_path) == False:
-                try:
-                    os.mkdir(new_dir_path)
-                    print("Successfully created the directory %s " % new_dir_path)
-                except OSError:
-                    print("Creation of the directory %s failed" % new_dir_path)
-
-            # get filename from user
-            filename = input('Please specify a file: ')
-
-            # send file name to server
-            for i in range(0, 4):
-                try:
-                    conns[i].send(filename.encode())
-                except Exception:
-                    pass
-
-            # ----------------------------
-            # PARALLEL FIRST BATCH (threads)
-            # ----------------------------
-            chunk_store = {}  # {chunk_name: bytes}
-            chunk_lock = threading.Lock()
-            buffersize_container = {'buffersize': None}
-
-            threads = []
-            for i in range(0, 4):
-                try:
-                    t = threading.Thread(
-                        target=threaded_first_batch,
-                        args=(conns[i], DFSS[i], filename, chunk_store, chunk_lock, buffersize_container)
-                    )
-                    t.start()
-                    threads.append(t)
-                except Exception:
-                    pass
-
-            # wait for first batch threads to finish
-            for t in threads:
-                t.join()
-
-            # read how many arrived
-            arrived = list(chunk_store.keys())
-            num_chunks = len(arrived)
-
-            # if not all 4 arrived, request second batch and read in parallel
-            if num_chunks < 4:
-                NACK = 'Transfer incomplete'
-                print(NACK + '\nOnly ' + str(num_chunks) + ' out of 4 chunks arrived.')
-                for i in range(0, 4):
-                    try:
-                        conns[i].send(NACK.encode())
-                    except Exception:
-                        pass
-
-                # second batch threads
-                sec_threads = []
-                buffersize = buffersize_container.get('buffersize') or 4096
-                for i in range(0, 4):
-                    try:
-                        t = threading.Thread(
-                            target=threaded_second_batch,
-                            args=(conns[i], DFSS[i], filename, chunk_store, chunk_lock, buffersize)
-                        )
-                        t.start()
-                        sec_threads.append(t)
-                    except Exception:
-                        pass
-
-                for t in sec_threads:
-                    t.join()
-
-                # check final collection
-                arrived2_clean = []
-                for k in chunk_store.keys():
-                    if k.split('_')[0] == filename:
-                        arrived2_clean.append(k)
-
-                # prepare integer ordering
-                arrived2_intlist = []
-                for f in arrived2_clean:
-                    try:
-                        arrived2_intlist.append(int(f.split('_')[1].split('.')[0]))
-                    except:
-                        pass
-
-                arrived2_intlist.sort()
-                if arrived2_intlist == [1, 2, 3, 4]:
-                    print('Chunks 1 through 4 are present.')
-
-                    # send FIN
-                    FIN = 'Transfer successful.'
-                    for i in range(0, 4):
-                        try:
-                            conns[i].send(FIN.encode())
-                        except Exception:
-                            pass
-
-                    # write final file (in order)
-                    final_filename = filename + '.txt'
-                    with open(username + '\\' + final_filename, 'wb') as outfile:
-                        for num in [1, 2, 3, 4]:
-                            cname = f"{filename}_{num}.txt"
-                            outfile.write(chunk_store[cname])
-
-                    print('File successfully reconstructed.')
-
-                    # cleanup temporary chunk files (none created on disk in this implementation)
-
-                    print('Exiting now...')
-                    sys.exit()
-                else:
-                    FIN = 'Transfer failed.\nExiting now...'
-                    for i in range(0, 4):
-                        try:
-                            conns[i].send(FIN.encode())
-                        except Exception:
-                            pass
-
-                    print(FIN)
-                    sys.exit()
-
-            else:
-                # all 4 arrived in first batch
-                print('A total of ' + str(num_chunks) + ' chunks arrived.')
-
-                # check they are 1..4
-                arrived_ordered = []
-                for name in arrived:
-                    try:
-                        arrived_ordered.append(int(name.split('_')[1].split('.')[0]))
-                    except:
-                        pass
-                arrived_ordered.sort()
-
-                if arrived_ordered == [1, 2, 3, 4]:
-                    print('All four chunks are present.')
-
-                    # send FIN ACK
-                    FIN = 'Transfer successful.'
-                    for i in range(0, 4):
-                        try:
-                            conns[i].send(FIN.encode())
-                        except Exception:
-                            pass
-
-                    # write file
-                    final_filename = filename + '.txt'
-                    with open(username + '\\' + final_filename, 'wb') as outfile:
-                        for num in [1, 2, 3, 4]:
-                            cname = f"{filename}_{num}.txt"
-                            outfile.write(chunk_store[cname])
-
-                    print('File successfully reconstructed.')
-                    print('Exiting now...')
-                    sys.exit()
-                else:
-                    FIN = 'Transfer failed.\nExiting now...'
-                    for i in range(0, 4):
-                        try:
-                            conns[i].send(FIN.encode())
-                        except Exception:
-                            pass
-
-                    print(FIN)
-                    sys.exit()
-
-        elif answer.lower() == 'exit':
-            print('Exiting now...')
-            sys.exit()
-
-        # allow user to try again possibly...
-        else:
-            print('This method does not exist.\nExiting now...')
-            sys.exit()
-
-    # GET ----------------------------------------
-    else:
-        # inform servers
-        for i in range(0, 4):
-            try:
-                conns[i].send(command.encode())
-            except Exception:
-                pass
-
-        # create a subdirectory for user in client
-        new_dir_path = os.getcwd() + '\\' + username
-
-        if os.path.isdir(new_dir_path) == False:
-            try:
-                os.mkdir(new_dir_path)
-                print("Successfully created the directory %s " % new_dir_path)
-            except OSError:
-                print("Creation of the directory %s failed" % new_dir_path)
-
-        # get filename from user
-        filename = input('Please specify a file: ')
-
-        # send file name to server
-        for i in range(0, 4):
-            try:
-                conns[i].send(filename.encode())
-            except Exception:
-                pass
-
-        # ----------------------------
-        # PARALLEL FIRST BATCH (threads)
-        # ----------------------------
-        chunk_store = {}  # {chunk_name: bytes}
-        chunk_lock = threading.Lock()
-        buffersize_container = {'buffersize': None}
+            c = socket.socket()
+            c.settimeout(5)
+            c.connect(s)
+            c.send(username.encode())
+            c.send(password.encode())
+            print(c.recv(1024).decode().strip())
+            conns.append(c)
+        except:
+            print(f"{names[i]} unavailable")
+            conns.append(None)
+
+    command = input("Command [put|get|list]: ").lower()
+
+    for c in conns:
+        if c:
+            c.send(command.encode())
+
+    # ---------------- PUT ---------------- #
+    if command == 'put':
+        filename = input("Filename (no .txt): ")
+        size = os.path.getsize(filename + '.txt')
+        buf = size // 4 + 4
+
+        split_file(filename, buf)
+        pairs = chunk_pairs(filename)
+
+        for i, c in enumerate(conns):
+            if not c:
+                continue
+            c.send(str(buf).encode())
+            for chunk in pairs[i]:
+                c.send(chunk.encode())
+                time.sleep(0.2)
+                c.send(open(chunk, 'rb').read())
+
+        for i in range(1, 5):
+            os.remove(f"{filename}_{i}.txt")
+
+        print("PUT completed.")
+
+    # ---------------- GET ---------------- #
+    elif command == 'get':
+        filename = input("Filename: ")
+
+        for c in conns:
+            if c:
+                c.send(filename.encode())
+
+        store = {}
+        lock = threading.Lock()
 
         threads = []
-        for i in range(0, 4):
-            try:
-                t = threading.Thread(
-                    target=threaded_first_batch,
-                    args=(conns[i], DFSS[i], filename, chunk_store, chunk_lock, buffersize_container)
-                )
+        for c in conns:
+            if c:
+                t = threading.Thread(target=recv_chunks, args=(c, store, lock))
                 t.start()
                 threads.append(t)
-            except Exception:
-                pass
 
-        # wait for first batch threads to finish
         for t in threads:
             t.join()
 
-        # read how many arrived
-        arrived = list(chunk_store.keys())
-        num_chunks = len(arrived)
-
-        # if not all 4 arrived, request second batch and read in parallel
-        if num_chunks < 4:
-            NACK = 'Transfer incomplete'
-            print(NACK + '\nOnly ' + str(num_chunks) + ' out of 4 chunks arrived.')
-            for i in range(0, 4):
-                try:
-                    conns[i].send(NACK.encode())
-                except Exception:
-                    pass
-
-            # second batch threads
-            sec_threads = []
-            buffersize = buffersize_container.get('buffersize') or 4096
-            for i in range(0, 4):
-                try:
-                    t = threading.Thread(
-                        target=threaded_second_batch,
-                        args=(conns[i], DFSS[i], filename, chunk_store, chunk_lock, buffersize)
-                    )
-                    t.start()
-                    sec_threads.append(t)
-                except Exception:
-                    pass
-
-            for t in sec_threads:
-                t.join()
-
-            # check final collection
-            arrived2_clean = []
-            for k in chunk_store.keys():
-                if k.split('_')[0] == filename:
-                    arrived2_clean.append(k)
-
-            # prepare integer ordering
-            arrived2_intlist = []
-            for f in arrived2_clean:
-                try:
-                    arrived2_intlist.append(int(f.split('_')[1].split('.')[0]))
-                except:
-                    pass
-
-            arrived2_intlist.sort()
-            if arrived2_intlist == [1, 2, 3, 4]:
-                print('Chunks 1 through 4 are present.')
-
-                # send FIN
-                FIN = 'Transfer successful.'
-                for i in range(0, 4):
-                    try:
-                        conns[i].send(FIN.encode())
-                    except Exception:
-                        pass
-
-                # write final file (in order)
-                final_filename = filename + '.txt'
-                with open(username + '\\' + final_filename, 'wb') as outfile:
-                    for num in [1, 2, 3, 4]:
-                        cname = f"{filename}_{num}.txt"
-                        outfile.write(chunk_store[cname])
-
-                print('File successfully reconstructed.')
-
-                # cleanup temporary chunk files (none created on disk in this implementation)
-
-                print('Exiting now...')
-                sys.exit()
-            else:
-                FIN = 'Transfer failed.\nExiting now...'
-                for i in range(0, 4):
-                    try:
-                        conns[i].send(FIN.encode())
-                    except Exception:
-                        pass
-
-                print(FIN)
-                sys.exit()
-
+        if len(store) == 4:
+            os.makedirs(username, exist_ok=True)
+            with open(f"{username}/{filename}.txt", 'wb') as out:
+                for i in range(1, 5):
+                    out.write(store[f"{filename}_{i}.txt"])
+            print("GET successful.")
         else:
-            # all 4 arrived in first batch
-            print('A total of ' + str(num_chunks) + ' chunks arrived.')
+            print("GET failed.")
 
-            # check they are 1..4
-            arrived_ordered = []
-            for name in arrived:
+    # ---------------- LIST ---------------- #
+    elif command == 'list':
+        for c in conns:
+            if c:
                 try:
-                    arrived_ordered.append(int(name.split('_')[1].split('.')[0]))
+                    print(c.recv(4096).decode())
                 except:
                     pass
-            arrived_ordered.sort()
 
-            if arrived_ordered == [1, 2, 3, 4]:
-                print('All four chunks are present.')
-
-                # send FIN ACK
-                FIN = 'Transfer successful.'
-                for i in range(0, 4):
-                    try:
-                        conns[i].send(FIN.encode())
-                    except Exception:
-                        pass
-
-                # write file
-                final_filename = filename + '.txt'
-                with open(username + '\\' + final_filename, 'wb') as outfile:
-                    for num in [1, 2, 3, 4]:
-                        cname = f"{filename}_{num}.txt"
-                        outfile.write(chunk_store[cname])
-
-                print('File successfully reconstructed.')
-                print('Exiting now...')
-                sys.exit()
-            else:
-                FIN = 'Transfer failed.\nExiting now...'
-                for i in range(0, 4):
-                    try:
-                        conns[i].send(FIN.encode())
-                    except Exception:
-                        pass
-
-                print(FIN)
-                sys.exit()
-
-
-# run client
 if __name__ == '__main__':
     check_args()
     client()
