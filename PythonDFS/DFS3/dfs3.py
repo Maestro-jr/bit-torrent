@@ -29,13 +29,15 @@ os.makedirs(STORAGE_ROOT, exist_ok=True)
 # =========================
 def check_args():
     if len(sys.argv) != 2:
-        print("ERROR: Must supply port number")
-        sys.exit(1)
-    port = int(sys.argv[1])
-    if port != 10003:
-        print("ERROR: Port must be 10003")
-        sys.exit(1)
-    return port
+        print("ERROR: Must supply port number \nUSAGE: py dfs3.py <port>")
+        sys.exit()
+    try:
+        port = int(sys.argv[1])
+        return port
+    except ValueError:
+        print("ERROR: Port number must be a number.")
+        sys.exit()
+
 
 server_port = check_args()
 
