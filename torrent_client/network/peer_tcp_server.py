@@ -42,7 +42,7 @@ class PeerTCPServer:
         else:
             self._torrent_managers[info_hash].accept_client(peer, client)
 
-    PORT_RANGE = range(6881, 6889 + 1)
+    PORT_RANGE = range(18001, 18009 + 1)
 
     async def start(self):
         for port in PeerTCPServer.PORT_RANGE:
