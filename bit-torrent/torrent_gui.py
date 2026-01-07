@@ -19,7 +19,9 @@ from PyQt5.QtWidgets import QWidget, QListWidget, QAbstractItemView, QLabel, QVB
     QListWidgetItem, QMainWindow, QApplication, QFileDialog, QMessageBox, QDialog, QDialogButtonBox, QTreeWidget, \
     QTreeWidgetItem, QHeaderView, QHBoxLayout, QPushButton, QLineEdit, QAction
 
-from torrent_client.control import ControlManager, ControlServer, ControlClient
+from torrent_client.control.manager import ControlManager
+from torrent_client.control.server import ControlServer
+from torrent_client.control.client import ControlClient
 from torrent_client.models import TorrentState, TorrentInfo, FileTreeNode, FileInfo
 from torrent_client.utils import humanize_speed, humanize_time, humanize_size
 
