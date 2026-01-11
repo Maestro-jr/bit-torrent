@@ -905,39 +905,31 @@ class LoginWindow(QDialog):
         result = otp_dialog.exec()
         print(f"Dialog result: {result}, verified: {otp_dialog.verified}")
 
+        # ALWAYS show the login window again first
+        self.show()
+        QApplication.processEvents()
+
         if result == QDialog.Accepted and otp_dialog.verified:
             # OTP verified, create account
             success, message = self.user_manager.register(username, password, fullname)
 
             if success:
-                # Show success message briefly
-                self.show()
-                QApplication.processEvents()
+                # Show success message
                 self._show_error(self.signup_message, message, is_error=False)
                 QApplication.processEvents()
 
-                # Set the current user and emit login successful
+                # Set the current user
                 self.current_user = username
 
-                # Close the dialog after a short delay to show success message
-                QTimer.singleShot(1000, lambda: self._complete_signup(username))
+                # CRITICAL: Emit signal and accept IMMEDIATELY - no timer delays
+                self.login_successful.emit(username)
+                self.accept()  # This closes the window and returns to main()
             else:
                 # Show error and return to signup
-                self.show()
-                QApplication.processEvents()
                 self._show_error(self.signup_message, message)
         else:
-            # OTP verification cancelled or failed - show login window again
-            self.show()
-            QApplication.processEvents()
+            # OTP verification cancelled or failed
             self._show_error(self.signup_message, 'Email verification cancelled')
-
-    def _complete_signup(self, username):
-        """Complete the signup process and open the main app"""
-        print(f"Completing signup for {username}")
-        self.current_user = username
-        self.login_successful.emit(username)
-        self.accept()  # This closes the LoginWindow and returns Accepted status
 
 
 class TorrentAddingDialog(QDialog):
